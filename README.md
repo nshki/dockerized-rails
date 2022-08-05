@@ -19,5 +19,5 @@ This is a [Rails application template](https://guides.rubyonrails.org/rails_appl
 ## Setup
 
 ```
-$ rails new my_new_project --template=https://raw.githubusercontent.com/nshki/dockerized-rails/dockerized-rails-template.rb --database=postgresql --skip-bundle
+$ rails new my_new_project --template=https://raw.githubusercontent.com/nshki/dockerized-rails/main/dockerized-rails-template.rb --database=postgresql --skip-bundle
 ```
