@@ -119,12 +119,8 @@ file("Dockerfile.local") do
     COPY Gemfile.lock /app/
     RUN bundle install
 
-    # Run an entrypoint script.
-    COPY entrypoint.sh /usr/bin/
-    RUN chmod +x /usr/bin/entrypoint.sh
-    ENTRYPOINT ["entrypoint.sh"]
+    # Define default command for the container.
     EXPOSE 3000
-
     CMD ["rails", "server", "-b", "0.0.0.0"]
   DOCKERFILE
 end
@@ -140,6 +136,8 @@ file("docker-compose.yml") do
           dockerfile: ./Dockerfile.local
         volumes:
           - .:/app
+        tmpfs:
+          - /app/tmp/pids
         ports:
           - 3000:3000
         environment:
@@ -179,20 +177,6 @@ file("docker-compose.yml") do
       selenium:
         image: seleniarm/standalone-firefox
   DOCKERCOMPOSE
-end
-
-file("entrypoint.sh") do
-  <<~ENTRYPOINT
-    #!/bin/bash
-
-    set -e
-
-    # Remove a potentially pre-existing server.pid for Rails.
-    rm -f /app/tmp/pids/server.pid
-
-    # Then exec the container's main process (what's set as CMD in the Dockerfile).
-    exec "$@"
-  ENTRYPOINT
 end
 
 # 4. Binstubs
