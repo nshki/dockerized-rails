@@ -64,6 +64,13 @@ file("config/database.yml") do
   CONFIG
 end
 
+file("Procfile.dev") do
+  <<~PROCFILE
+    web: bin/rails server -b 0.0.0.0 -p 3000
+    worker: bundle exec sidekiq
+  PROCFILE
+end
+
 file("test/application_system_test_case.rb") do
   <<~TESTCASE
     require "test_helper"
@@ -121,7 +128,7 @@ file("Dockerfile.local") do
 
     # Define default command for the container.
     EXPOSE 3000
-    CMD ["rails", "server", "-b", "0.0.0.0"]
+    CMD ["bin/dev"]
   DOCKERFILE
 end
 
@@ -148,20 +155,6 @@ file("docker-compose.yml") do
           - redis
           - selenium
 
-      worker:
-        build:
-          context: .
-          dockerfile: ./Dockerfile.local
-        command: "bundle exec sidekiq"
-        volumes:
-          - .:/app
-        environment:
-          REDIS_URL: redis://redis:6379
-          REDIS_PROVIDER: REDIS_URL
-        depends_on:
-          - db
-          - redis
-
       db:
         image: postgres:latest
         ports:
@@ -181,9 +174,18 @@ end
 
 # 4. Binstubs
 #-----------------------------------------------------------------------------------------------------------------------
+file("bin/compose") do
+  <<~BIN
+    #!/usr/bin/env bash
+
+    docker-compose up $*
+  BIN
+end
+run("chmod +x bin/compose")
+
 file("bin/credentials") do
   <<~BIN
-    #!/bin/sh
+    #!/usr/bin/env bash
 
     docker-compose run --no-deps --rm -e "EDITOR=vim" app bin/rails credentials:edit
   BIN
@@ -192,16 +194,21 @@ run("chmod +x bin/credentials")
 
 file("bin/dev") do
   <<~BIN
-    #!/bin/sh
+    #!/usr/bin/env bash
 
-    docker-compose up $*
+    if ! gem list foreman -i --silent; then
+      echo "Installing foreman..."
+      gem install foreman
+    fi
+
+    foreman start -f Procfile.dev "$@"
   BIN
 end
 run("chmod +x bin/dev")
 
 file("bin/run") do
   <<~BIN
-    #!/bin/sh
+    #!/usr/bin/env bash
 
     docker-compose run --no-deps --rm app $*
   BIN
@@ -264,18 +271,20 @@ file("README.md") do
 
     When booting up a local copy of the app for the first time:
 
-    1. Run `bin/dev` to boot up Docker Compose and build Docker images.
-    2. Run `bin/run bin/rails db:setup` to create local databases with seed data.
+    1. Run `bin/compose` to boot up Docker Compose and build Docker images.
+    2. Run `bin/run bin/rails db:create` to create development and test databases.
+    3. Run `bin/run bin/rails db:schema:load` to load in the current schema.
+    4. Run `bin/run bin/rails db:seed` to seed the database.
 
     ### General commands
 
     ```bash
-    $ bin/dev           # Boot up all Docker Compose services
-    $ bin/dev --build   # Build/rebuild all services
-    $ bin/run           # Run a command in the app service
-                        # e.g. bin/run bin/rails test
-                        #      bin/run bundle exec chusaku
-    $ bin/credentials   # Edit encrypted credentials with Vim
+    $ bin/compose           # Boot up all Docker Compose services
+    $ bin/compose --build   # Build/rebuild all services
+    $ bin/run               # Run a command in the app service
+                            # e.g. bin/run bin/rails test
+                            #      bin/run bundle exec chusaku
+    $ bin/credentials       # Edit encrypted credentials with Vim
     ```
 
     ### Linting and annotations
@@ -290,7 +299,7 @@ end
 
 # 7. Initial setup
 #-----------------------------------------------------------------------------------------------------------------------
-run("bin/dev --build --detach")
+run("bin/compose --build --detach")
 run("bin/run bin/rails importmap:install")
 run("bin/run bin/rails turbo:install")
 run("bin/run bin/rails turbo:install:redis")

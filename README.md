@@ -3,9 +3,10 @@
 This is a [Rails application template](https://guides.rubyonrails.org/rails_application_templates.html) for an opinionated Docker setup.
 
 - Docker Compose-optimized project
-  - App, Sidekiq worker, Postgres, Redis, and Selenium services
+  - App, Postgres, Redis, and Selenium services
+  - Sidekiq worker runs via Foreman to prevent `bin/dev` or `Procfile.dev` clashes with gems you might add later
 - Binstubs that make working with Docker Compose easy
-  - `bin/dev`: Alias for `docker-compose up`
+  - `bin/compose`: Alias for `docker-compose up`
   - `bin/run`: Runs a command in the `app` service
   - `bin/credentials`: Opens the encrypted credentials file in Vim
 - Additional default gems
