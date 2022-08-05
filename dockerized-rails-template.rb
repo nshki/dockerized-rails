@@ -1,0 +1,318 @@
+# Table of contents:
+#
+# 1. Gems
+# 2. Config
+# 3. Docker
+# 4. Binstubs
+# 5. GitHub Actions
+# 6. README
+# 7. Initial setup
+
+# 1. Gems
+#-----------------------------------------------------------------------------------------------------------------------
+gem "sidekiq"
+
+gem_group :development, :test do
+  gem "standard"
+end
+
+gem_group :development do
+  gem "annotate"
+  gem "chusaku"
+  gem "mocktail"
+end
+
+run("sed '/webdrivers/d' Gemfile")
+file("Gemfile.lock")
+
+# 2. Config
+#-----------------------------------------------------------------------------------------------------------------------
+environment "config.active_job.queue_adapter = :sidekiq"
+
+file(".rubocop.yml") do
+  <<~RUBOCOP
+    require: standard
+
+    inherit_gem:
+      standard: config/base.yml
+  RUBOCOP
+end
+
+file("config/database.yml") do
+  <<~CONFIG
+    local: &local
+      adapter: postgresql
+      encoding: unicode
+      host: db
+      username: postgres
+      password: password
+      pool: 5
+
+    development:
+      <<: *local
+      database: app_development
+
+    test:
+      <<: *local
+      database: app_test
+
+    production:
+      adapter: postgresql
+      encoding: unicode
+      pool: 5
+      url: <%= ENV["DATABASE_URL"] %>
+  CONFIG
+end
+
+file("test/application_system_test_case.rb") do
+  <<~TESTCASE
+    require "test_helper"
+
+    class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
+      driven_by \\
+        :selenium,
+        using: :headless_firefox,
+        screen_size: [1400, 1400],
+        options: {url: "http://selenium:4444"}
+    end
+  TESTCASE
+end
+
+run("echo 'Capybara.server_host = \"0.0.0.0\"' >> test/test_helper.rb")
+run("echo 'Capybara.app_host = \"http://\#{ENV.fetch(\"HOSTNAME\")}:\#{Capybara.server_port}\"' >> test/test_helper.rb")
+
+
+# 3. Docker
+#-----------------------------------------------------------------------------------------------------------------------
+file(".dockerignore") do
+  <<~DOCKERIGNORE
+    .git
+    tmp
+    !tmp/pids
+    log
+    public/assets
+    public/packs
+    .bundle
+
+    db/*.sqlite3
+    db/*.sqlite3-*
+
+    storage
+    config/master.key
+    config/credentials/*.key
+
+    node_modules
+  DOCKERIGNORE
+end
+
+file("Dockerfile.local") do
+  <<~DOCKERFILE
+    FROM ruby:3.1.2
+    WORKDIR /app/
+
+    # Install image dependencies.
+    RUN apt-get update -qq && apt-get install -y postgresql-client vim
+    RUN gem update bundler
+
+    # Install Ruby dependencies.
+    COPY Gemfile /app/
+    COPY Gemfile.lock /app/
+    RUN bundle install
+
+    # Run an entrypoint script.
+    COPY entrypoint.sh /usr/bin/
+    RUN chmod +x /usr/bin/entrypoint.sh
+    ENTRYPOINT ["entrypoint.sh"]
+    EXPOSE 3000
+
+    CMD ["rails", "server", "-b", "0.0.0.0"]
+  DOCKERFILE
+end
+
+file("docker-compose.yml") do
+  <<~DOCKERCOMPOSE
+    version: "3.9"
+
+    services:
+      app:
+        build:
+          context: .
+          dockerfile: ./Dockerfile.local
+        volumes:
+          - .:/app
+        ports:
+          - 3000:3000
+        environment:
+          REDIS_URL: redis://redis:6379
+          REDIS_PROVIDER: REDIS_URL
+        depends_on:
+          - db
+          - redis
+          - selenium
+
+      worker:
+        build:
+          context: .
+          dockerfile: ./Dockerfile.local
+        command: "bundle exec sidekiq"
+        volumes:
+          - .:/app
+        environment:
+          REDIS_URL: redis://redis:6379
+          REDIS_PROVIDER: REDIS_URL
+        depends_on:
+          - db
+          - redis
+
+      db:
+        image: postgres:latest
+        ports:
+          - 5432:5432
+        environment:
+          POSTGRES_PASSWORD: password
+
+      redis:
+        image: redis:latest
+        ports:
+          - 6379:6379
+
+      selenium:
+        image: seleniarm/standalone-firefox
+  DOCKERCOMPOSE
+end
+
+file("entrypoint.sh") do
+  <<~ENTRYPOINT
+    #!/bin/bash
+
+    set -e
+
+    # Remove a potentially pre-existing server.pid for Rails.
+    rm -f /app/tmp/pids/server.pid
+
+    # Then exec the container's main process (what's set as CMD in the Dockerfile).
+    exec "$@"
+  ENTRYPOINT
+end
+
+# 4. Binstubs
+#-----------------------------------------------------------------------------------------------------------------------
+file("bin/credentials") do
+  <<~BIN
+    #!/bin/sh
+
+    docker-compose run --no-deps --rm -e "EDITOR=vim" app bin/rails credentials:edit
+  BIN
+end
+run("chmod +x bin/credentials")
+
+file("bin/dev") do
+  <<~BIN
+    #!/bin/sh
+
+    docker-compose up $*
+  BIN
+end
+run("chmod +x bin/dev")
+
+file("bin/run") do
+  <<~BIN
+    #!/bin/sh
+
+    docker-compose run --no-deps --rm app $*
+  BIN
+end
+run("chmod +x bin/run")
+
+# 5. GitHub Actions
+#-----------------------------------------------------------------------------------------------------------------------
+file(".github/workflows/docker-ci.yml") do
+  <<~CI
+    name: Linting, annotations, and test suite
+    on: [pull_request]
+    env:
+      RAILS_MASTER_KEY: ${{ secrets.RAILS_MASTER_KEY }}
+    jobs:
+      run:
+        runs-on: ubuntu-latest
+        steps:
+          - name: Check out repository code
+            uses: actions/checkout@v3
+
+          - name: Build with Docker Compose
+            run: docker-compose build
+
+          - name: Start Postgres database
+            run: docker-compose up --detach db
+
+          - name: Create database
+            run: docker-compose run -e RAILS_MASTER_KEY --rm app bin/rails db:create
+
+          - name: Load schema
+            run: docker-compose run -e RAILS_MASTER_KEY --rm app bin/rails db:schema:load
+
+          - name: Run Standard
+            run: bin/run bundle exec standardrb
+
+          - name: Run Annotate
+            run: bin/run bundle exec annotate --frozen
+
+          - name: Run Chusaku
+            run: bin/run bundle exec chusaku --dry-run --exit-with-error-on-annotation
+
+          - name: Run tests
+            run: docker-compose run -e RAILS_MASTER_KEY --rm app bin/rails test
+
+          - name: Run system tests
+            run: docker-compose run -e RAILS_MASTER_KEY --rm app bin/rails test:system
+  CI
+end
+
+# 6. README
+#-----------------------------------------------------------------------------------------------------------------------
+file("README.md") do
+  <<~README
+    ## Local development
+
+    Make sure you have Docker Compose installed and grab a copy of the master key before proceeding.
+
+    ### First-time setup
+
+    When booting up a local copy of the app for the first time:
+
+    1. Run `bin/dev` to boot up Docker Compose and build Docker images.
+    2. Run `bin/run bin/rails db:setup` to create local databases with seed data.
+
+    ### General commands
+
+    ```bash
+    $ bin/dev           # Boot up all Docker Compose services
+    $ bin/dev --build   # Build/rebuild all services
+    $ bin/run           # Run a command in the app service
+                        # e.g. bin/run bin/rails test
+                        #      bin/run bundle exec chusaku
+    $ bin/credentials   # Edit encrypted credentials with Vim
+    ```
+
+    ### Linting and annotations
+
+    ```bash
+    $ bin/run bundle exec annotate     # Annotates models
+    $ bin/run bundle exec chusaku      # Annotates controllers
+    $ bin/run bundle exec standardrb   # Runs style checks
+    ```
+  README
+end
+
+# 7. Initial setup
+#-----------------------------------------------------------------------------------------------------------------------
+run("bin/dev --build --detach")
+run("bin/run bin/rails importmap:install")
+run("bin/run bin/rails turbo:install")
+run("bin/run bin/rails turbo:install:redis")
+run("bin/run bin/rails stimulus:install")
+run("bin/run bin/rails db:create")
+run("bin/run bin/rails db:migrate")
+run("bin/run bin/rails g annotate:install")
+run("bin/run bundle exec standardrb --fix")
+run("docker-compose stop")
