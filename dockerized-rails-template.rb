@@ -119,7 +119,7 @@ file("Dockerfile.local") do
 
     # Install image dependencies.
     RUN apt-get update -qq && apt-get install -y postgresql-client vim
-    RUN gem update bundler
+    RUN gem update --system
 
     # Install Ruby dependencies.
     COPY Gemfile /app/
