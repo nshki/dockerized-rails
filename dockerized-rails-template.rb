@@ -19,6 +19,9 @@ end
 gem_group :development do
   gem "annotate"
   gem "chusaku"
+end
+
+gem_group :test do
   gem "mocktail"
 end
 
