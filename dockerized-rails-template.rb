@@ -115,7 +115,7 @@ file(".dockerignore") do
   DOCKERIGNORE
 end
 
-file("Dockerfile.local") do
+file("Dockerfile.dev") do
   <<~DOCKERFILE
     FROM ruby:3.1.2
     WORKDIR /app/
@@ -143,7 +143,7 @@ file("docker-compose.yml") do
       app:
         build:
           context: .
-          dockerfile: ./Dockerfile.local
+          dockerfile: ./Dockerfile.dev
         volumes:
           - .:/app
         tmpfs:
