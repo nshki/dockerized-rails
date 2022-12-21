@@ -18,13 +18,15 @@ end
 
 gem_group :development do
   gem "annotate"
-  gem "chusaku"
+  gem "chusaku", require: false
 end
 
 gem_group :test do
   gem "mocktail"
+  gem "simplecov", require: false
 end
 
+run("sed -i '' '/^# gem \"redis\"/s/^# //' Gemfile")
 run("sed '/webdrivers/d' Gemfile")
 file("Gemfile.lock")
 
@@ -88,8 +90,40 @@ file("test/application_system_test_case.rb") do
   TESTCASE
 end
 
-run("echo 'Capybara.server_host = \"0.0.0.0\"' >> test/test_helper.rb")
-run("echo 'Capybara.app_host = \"http://\#{ENV.fetch(\"HOSTNAME\")}:\#{Capybara.server_port}\"' >> test/test_helper.rb")
+file("test/test_helper.rb") do
+  <<~TESTHELPER
+    require "simplecov"
+    SimpleCov.start("rails") do
+      add_filter("app/channels")
+    end
+
+    ENV["RAILS_ENV"] ||= "test"
+    require_relative "../config/environment"
+    require "rails/test_help"
+
+    Capybara.server_host = "0.0.0.0"
+    Capybara.app_host = "http://\#{ENV.fetch("HOSTNAME")}:\#{Capybara.server_port}"
+
+    class ActiveSupport::TestCase
+      # Run tests in parallel with specified workers
+      parallelize(workers: :number_of_processors)
+
+      # Get parallel tests to play nice with SimpleCov.
+      parallelize_setup { |worker| SimpleCov.command_name("\#{SimpleCov.command_name}-\#{worker}") }
+      parallelize_teardown { |worker| SimpleCov.result }
+
+      # Setup all fixtures in test/fixtures/*.yml for all tests in alphabetical order.
+      fixtures :all
+
+      # Resets Mocktail before every test.
+      #
+      # @return [void]
+      def setup
+        Mocktail.reset
+      end
+    end
+  TESTHELPER
+end
 
 
 # 3. Docker

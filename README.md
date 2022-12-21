@@ -14,6 +14,7 @@ This is a [Rails application template](https://guides.rubyonrails.org/rails_appl
   - [chusaku](https://github.com/nshki/chusaku): Controller annotations
   - [mocktail](https://github.com/testdouble/mocktail): Easier mocking in tests
   - [sidekiq](https://github.com/mperham/sidekiq): Background processing
+  - [simplecov](https://github.com/simplecov-ruby/simplecov): Test suite code coverage
   - [standard](https://github.com/testdouble/standard): Style guide, linter, and fixer
 - GitHub Action workflow that runs linting, annotations, and test suite
 
