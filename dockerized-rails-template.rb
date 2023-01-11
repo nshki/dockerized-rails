@@ -69,6 +69,22 @@ file("config/database.yml") do
   CONFIG
 end
 
+file("config/cable.yml") do
+  <<~CONFIG
+    development:
+      adapter: redis
+      url: <%= ENV.fetch("REDIS_URL") { "redis://localhost:6379/1" } %>
+
+    test:
+      adapter: test
+
+    production:
+      adapter: redis
+      url: <%= ENV.fetch("REDIS_URL") { "redis://localhost:6379/1" } %>
+      channel_prefix: app_production
+  CONFIG
+end
+
 file("Procfile.dev") do
   <<~PROCFILE
     web: bin/rails server -b 0.0.0.0 -p 3000
@@ -86,6 +102,8 @@ file("test/application_system_test_case.rb") do
         using: :headless_firefox,
         screen_size: [1400, 1400],
         options: {url: "http://selenium:4444"}
+
+      Capybara.enable_aria_label = true
     end
   TESTCASE
 end
@@ -206,6 +224,8 @@ file("docker-compose.yml") do
 
       selenium:
         image: seleniarm/standalone-firefox
+        volumes:
+          - .:/app
   DOCKERCOMPOSE
 end
 
