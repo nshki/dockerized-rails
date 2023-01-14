@@ -101,7 +101,7 @@ file("test/application_system_test_case.rb") do
         :selenium,
         using: :headless_firefox,
         screen_size: [1400, 1400],
-        options: {url: "http://selenium:4444"}
+        options: {url: "http://selenium:4444", clear_local_storage: true, clear_session_storage: true}
 
       Capybara.enable_aria_label = true
     end
@@ -133,11 +133,12 @@ file("test/test_helper.rb") do
       # Setup all fixtures in test/fixtures/*.yml for all tests in alphabetical order.
       fixtures :all
 
-      # Resets Mocktail before every test.
+      # Resets state between tests.
       #
       # @return [void]
       def setup
         Mocktail.reset
+        clear_enqueued_jobs if defined?(clear_enqueued_jobs)
       end
     end
   TESTHELPER
