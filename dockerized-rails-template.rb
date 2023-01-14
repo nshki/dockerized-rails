@@ -133,11 +133,12 @@ file("test/test_helper.rb") do
       # Setup all fixtures in test/fixtures/*.yml for all tests in alphabetical order.
       fixtures :all
 
-      # Resets Mocktail before every test.
+      # Resets state between tests.
       #
       # @return [void]
       def setup
         Mocktail.reset
+        clear_enqueued_jobs if defined?(clear_enqueued_jobs)
       end
     end
   TESTHELPER
