@@ -85,6 +85,14 @@ file("config/cable.yml") do
   CONFIG
 end
 
+file("config/initializers/generators.rb") do
+  <<~CONFIG
+    Rails.application.config.generators do |g|
+      g.orm :active_record, primary_key_type: :uuid, foreign_key_type: :uuid
+    end
+  CONFIG
+end
+
 file("Procfile.dev") do
   <<~PROCFILE
     web: bin/rails server -b 0.0.0.0 -p 3000
