@@ -34,6 +34,8 @@ file("Gemfile.lock")
 #-----------------------------------------------------------------------------------------------------------------------
 environment "config.active_job.queue_adapter = :sidekiq"
 
+ruby_version = File.read(".ruby-version").strip
+
 file(".rubocop.yml") do
   <<~RUBOCOP
     require: standard
@@ -183,7 +185,7 @@ end
 
 file("Dockerfile.dev") do
   <<~DOCKERFILE
-    FROM ruby:3.1.2
+    FROM ruby:#{ruby_version}
     WORKDIR /app/
 
     # Install image dependencies.
