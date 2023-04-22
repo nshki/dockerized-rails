@@ -319,7 +319,7 @@ file(".github/workflows/docker-ci.yml") do
             run: bin/run bundle exec standardrb
 
           - name: Run Annotate
-            run: bin/run bundle exec annotate --frozen
+            run: docker-compose run -e RAILS_MASTER_KEY --rm app bundle exec annotate --frozen
 
           - name: Run Chusaku
             run: bin/run bundle exec chusaku --dry-run --exit-with-error-on-annotation
